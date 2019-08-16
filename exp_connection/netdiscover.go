@@ -6,7 +6,9 @@ import (
 )
 
 var nodeCount = 50
-var linkCount = 8
+var linkCount = 4
+var establishingConnectionDuration = 50 * time.Millisecond
+var sendingSyncMessageInterval = 250 * time.Millisecond
 
 type node struct {
 	outgoing        map[int]bool
@@ -99,7 +101,7 @@ func main() {
 
 		// establish connection as needed.
 		for iNode, node := range nodes {
-			if node.connectionSlot < linkCount && t > node.lastConnection+50*time.Millisecond {
+			if node.connectionSlot < linkCount && t > node.lastConnection+establishingConnectionDuration {
 				node.connectionSlot++
 
 				i := findHostConnectionTarget(iNode, node.connectionSlot-1, linkCount, nodeCount)
@@ -115,7 +117,7 @@ func main() {
 
 		// send a message if needed.
 		for _, node := range nodes {
-			if node.lastMessageSent < t-500*time.Millisecond {
+			if node.lastMessageSent < t-sendingSyncMessageInterval {
 				node.c = 0
 				if node.t > 1 {
 					node.t = node.t / 2
@@ -130,18 +132,6 @@ func main() {
 						}
 					}
 				}
-				// relay confirmed nodes forward, but only if the outgoing node has this node confirmed.
-				/*for outgoing := range node.outgoing {
-					if !nodes[outgoing].confirmedNodes[iNode] {
-						continue
-					}
-					for confirmedNode := range node.confirmedNodes {
-						if !nodes[outgoing].confirmedNodes[confirmedNode] {
-							nodes[outgoing].confirmedNodes[confirmedNode] = true
-							nodes[outgoing].c++
-						}
-					}
-				}*/
 
 				node.lastMessageSent = t
 			} else if node.c > node.t {
@@ -158,20 +148,20 @@ func main() {
 					}
 				}
 
-				// relay confirmed nodes forward, but only if the outgoing node has this node confirmed.
-				/*for outgoing := range node.outgoing {
-					if !nodes[outgoing].confirmedNodes[iNode] {
-						continue
-					}
-					for confirmedNode := range node.confirmedNodes {
-						if !nodes[outgoing].confirmedNodes[confirmedNode] {
-							nodes[outgoing].confirmedNodes[confirmedNode] = true
-							nodes[outgoing].c++
-						}
-					}
-				}*/
 				node.lastMessageSent = t
 			}
+		}
+
+		// break if all nodes confirmed all the other nodes.
+		allConfirmed := true
+		for _, n := range nodes {
+			if len(n.confirmedNodes) != len(nodes)-1 {
+				allConfirmed = false
+				break
+			}
+		}
+		if allConfirmed {
+			break
 		}
 
 		t += 10 * time.Millisecond
@@ -196,5 +186,6 @@ func main() {
 		s := fmt.Sprintf("%d: outgoing=[%s] incoming=[%s] forward-visible=%d hops=%d", iNode, outgoing, incoming, len(node.confirmedNodes), hops)
 		fmt.Printf("%s\n", s)
 	}
+	fmt.Printf("Total time = %d ms\n", t/time.Millisecond)
 
 }
